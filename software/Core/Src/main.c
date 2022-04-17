@@ -106,6 +106,8 @@ int main(void)
   {
     HAL_ADC_PollForConversion(&hadc1,1000);
     readValue = HAL_ADC_GetValue(&hadc1);
+
+    // right branch, dude
     if (readValue < 1790) {
       HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 0);
       HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 1);
