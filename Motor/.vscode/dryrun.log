@@ -1,6 +1,0 @@
-make --dry-run --always-make --keep-going --print-directory
-make: Entering directory `/Users/dmitriykosolobov/Desktop/Motor'
-make: Leaving directory `/Users/dmitriykosolobov/Desktop/Motor'
- 
-Makefile:148: *** missing separator.  Stop.
-
