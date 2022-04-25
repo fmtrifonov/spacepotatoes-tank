@@ -92,12 +92,10 @@ int main(void)
   MX_TIM2_Init();
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
-  HAL_ADC_Start(&hadc1);  //PB1
-  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2); //PA1 TIM2 CH2
+  HAL_ADC_Start(&hadc1);
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
   uint16_t readValue;
-  int speed;
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 0);
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 0);
+  uint16_t PWM;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -106,20 +104,8 @@ int main(void)
   {
     HAL_ADC_PollForConversion(&hadc1,1000);
     readValue = HAL_ADC_GetValue(&hadc1);
-
-    // right branch, dude
-    if (readValue < 1790) {
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 0);
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 1);
-      speed = (readValue - 1790) * (-1) / 3;
-    } else if (readValue > 2220) {
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 0);
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 1);
-      speed = (readValue - 2220) / 3;
-    } else {
-      speed = 0;
-    }
-    __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_2, speed);
+    PWM = 250 + readValue/4.1;
+    __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_2, PWM);
     HAL_Delay(50);
     /* USER CODE END WHILE */
 
