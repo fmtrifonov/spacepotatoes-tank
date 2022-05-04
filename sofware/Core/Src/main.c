@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -31,6 +31,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define BUFF_SIZE 1
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -45,7 +46,7 @@ TIM_HandleTypeDef htim3;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
-
+uint8_t rx_buff;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -95,13 +96,28 @@ int main(void)
   MX_TIM3_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-
+  uint32_t times = 0;
+  uint8_t flag = 1;
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+  HAL_UART_Receive_IT(&huart1, &rx_buff, BUFF_SIZE);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    if((HAL_GetTick() - times) > 1000) // интервал 1000мс = 1сек
+      { 
+          // что-то делаем  
+          HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, flag);
+          if (flag == 1)
+            flag = 0;
+          else
+            flag = 1;
+          times = HAL_GetTick();
+      }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -310,15 +326,124 @@ static void MX_USART1_UART_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : PC13 */
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
 }
 
 /* USER CODE BEGIN 4 */
 
+/**
+  * @brief  This function for moving motors.
+  * @param None
+  * @retval None
+  */
+ void MOTORS_MOVE() {
+
+ }
+
+ /**
+  * @brief  This function for moving servo.
+  * @param None
+  * @retval None
+  */
+ void SERVO_MOVE() {
+   
+ }
+
+/**
+  * @brief  This function for shouting.
+  * @param None
+  * @retval None
+  */
+ void GUNSHOOT() {
+   
+ }
+
+ /**
+  * @brief  This function for playing music.
+  * @param None
+  * @retval None
+  */
+ void MUSIC_PLAY() {
+    uint32_t times = 0;
+    for (uint8_t i = 10; i < 30; i++) {
+      if (HAL_GetTick() - times > 100) {
+        __HAL_TIM_SET_AUTORELOAD(&htim3, i*2);
+        __HAL_TIM_SET_COMPARE(&htim3,TIM_CHANNEL_1, i);
+        times = HAL_GetTick();
+      }
+    }
+ }
+
+/**
+  * @brief  This function is for interrupting by BlueTooth.
+  * @param UART number
+  * @retval None
+  */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if(huart->Instance==USART1)
+  {
+    switch (rx_buff) {
+      case 'F': // motor forward
+        MOTORS_MOVE();
+        break;
+      case 'B': // motor backward
+        MOTORS_MOVE();
+        break;
+      case 'R': // motor right
+        MOTORS_MOVE();
+        break;
+      case 'L': // motor left
+        MOTORS_MOVE();
+        break;
+      case 'U': // servo up
+        SERVO_MOVE();
+        break;
+      case 'D': // servo down
+        SERVO_MOVE();
+        break;
+      case 'S': // servo left
+        SERVO_MOVE();
+        break;
+      case 'H': // servo right
+        SERVO_MOVE();
+        break;
+      case 'G': // GUNSHOT
+        GUNSHOOT();
+        break;
+      case 'M': // MUSIC
+        MUSIC_PLAY();
+        break;
+      default:
+        break;
+    }
+
+    // if (rx_buff)
+    // pwm = 250 + rx_buff/4.1;
+    // __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_2, pwm);
+    // pwm = 250 + rx_buff/4.1;
+    // __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, pwm);
+    // HAL_Delay(50);
+    
+    HAL_UART_Receive_IT(&huart1,rx_buff,BUFF_SIZE); // Enabling interrupt receive again
+  }
+}
 /* USER CODE END 4 */
 
 /**
