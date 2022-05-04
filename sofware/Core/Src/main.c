@@ -32,6 +32,11 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define BUFF_SIZE 1
+#define YES 1
+#define NO 0
+#define FORWARD 1
+#define BACKWARD -1
+#define STAY 0
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -349,20 +354,28 @@ static void MX_GPIO_Init(void)
 
 /**
   * @brief  This function for moving motors.
-  * @param None
+  * @param  2 params - type of moving for each motor
   * @retval None
   */
- void MOTORS_MOVE() {
-
+ void MOTORS_MOVE(uint8_t condition_motor_left, uint8_t condition_motor_right) {
+   uint16_t speed;
+   speed = 300;
+   
  }
 
  /**
   * @brief  This function for moving servo.
-  * @param None
+  * @param is this upper servo or not
   * @retval None
   */
- void SERVO_MOVE() {
-   
+ void SERVO_MOVE(uint8_t is_upper) {
+  uint16_t pwm;
+  pwm = 250 + rx_buff/4.1;
+  if (is_upper)
+    __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_2, pwm);
+  else
+    __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, pwm);
+  HAL_Delay(50);
  }
 
 /**
@@ -401,28 +414,28 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
   {
     switch (rx_buff) {
       case 'F': // motor forward
-        MOTORS_MOVE();
+        MOTORS_MOVE(FORWARD, FORWARD);
         break;
       case 'B': // motor backward
-        MOTORS_MOVE();
+        MOTORS_MOVE(BACKWARD, BACKWARD);
         break;
       case 'R': // motor right
-        MOTORS_MOVE();
+        MOTORS_MOVE(FORWARD, BACKWARD);
         break;
       case 'L': // motor left
-        MOTORS_MOVE();
+        MOTORS_MOVE(BACKWARD, FORWARD);
         break;
       case 'U': // servo up
-        SERVO_MOVE();
+        SERVO_MOVE(YES);
         break;
       case 'D': // servo down
-        SERVO_MOVE();
+        SERVO_MOVE(YES);
         break;
       case 'S': // servo left
-        SERVO_MOVE();
+        SERVO_MOVE(NO);
         break;
       case 'H': // servo right
-        SERVO_MOVE();
+        SERVO_MOVE(NO);
         break;
       case 'G': // GUNSHOT
         GUNSHOOT();
@@ -433,14 +446,6 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
       default:
         break;
     }
-
-    // if (rx_buff)
-    // pwm = 250 + rx_buff/4.1;
-    // __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_2, pwm);
-    // pwm = 250 + rx_buff/4.1;
-    // __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, pwm);
-    // HAL_Delay(50);
-    
     HAL_UART_Receive_IT(&huart1,rx_buff,BUFF_SIZE); // Enabling interrupt receive again
   }
 }
