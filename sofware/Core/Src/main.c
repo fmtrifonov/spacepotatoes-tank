@@ -37,6 +37,10 @@
 #define FORWARD 1
 #define BACKWARD -1
 #define STAY 0
+#define TIMEOFSHOT 2000
+#define SPEED 300
+#define DELAY 50
+#define ANGLE 300
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -45,7 +49,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
- TIM_HandleTypeDef htim2;
+ TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart1;
@@ -60,6 +65,7 @@ static void MX_GPIO_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -100,6 +106,7 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM3_Init();
   MX_USART1_UART_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   uint32_t times = 0;
   uint8_t flag = 1;
@@ -167,6 +174,90 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM1_Init(void)
+{
+
+  /* USER CODE BEGIN TIM1_Init 0 */
+
+  /* USER CODE END TIM1_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 1151;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 5624;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_OC_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_TIMING;
+  if (HAL_TIM_OC_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
+  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
+  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
+  sBreakDeadTimeConfig.DeadTime = 0;
+  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
+  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
+
+  /* USER CODE END TIM1_Init 2 */
+  HAL_TIM_MspPostInit(&htim1);
+
 }
 
 /**
@@ -337,16 +428,37 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : PC13 */
-  GPIO_InitStruct.Pin = GPIO_PIN_13;
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, Motor_1_2_Pin|Laser_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, Motor_1_1_Pin|Motor_2_2_Pin|Motor_2_1_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : LED_Pin */
+  GPIO_InitStruct.Pin = LED_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : Motor_1_2_Pin Laser_Pin */
+  GPIO_InitStruct.Pin = Motor_1_2_Pin|Laser_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : Motor_1_1_Pin Motor_2_2_Pin Motor_2_1_Pin */
+  GPIO_InitStruct.Pin = Motor_1_1_Pin|Motor_2_2_Pin|Motor_2_1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
 }
 
@@ -357,10 +469,41 @@ static void MX_GPIO_Init(void)
   * @param  2 params - type of moving for each motor
   * @retval None
   */
- void MOTORS_MOVE(uint8_t condition_motor_left, uint8_t condition_motor_right) {
-   uint16_t speed;
-   speed = 300;
-   
+ int MOTORS_MOVE(int8_t condition_motor_left, int8_t condition_motor_right) 
+ {
+  uint8_t speed_motor_1 = 0;
+  uint8_t speed_motor_2 = 0;
+
+  if (condition_motor_left == FORWARD) 
+  {
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, STAY);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, FORWARD);
+    speed_motor_1 = SPEED;
+  } else if (condition_motor_left == BACKWARD) 
+  {
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, FORWARD);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, STAY);
+    speed_motor_1 = SPEED;
+  }
+
+  if (condition_motor_right == FORWARD) 
+  {
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, STAY);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, FORWARD);
+    speed_motor_2 = SPEED;
+  } else if (condition_motor_right == BACKWARD) 
+  {
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, FORWARD);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, STAY);
+    speed_motor_2 = SPEED;
+  }
+
+  __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_3, speed_motor_1);
+  __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2, speed_motor_2);
+
+  uint32_t times = GetTick();
+  while (GetTick() - times < DELAY);
+
  }
 
  /**
@@ -368,14 +511,15 @@ static void MX_GPIO_Init(void)
   * @param is this upper servo or not
   * @retval None
   */
- void SERVO_MOVE(uint8_t is_upper) {
-  uint16_t pwm;
-  pwm = 250 + rx_buff/4.1;
+ void SERVO_MOVE(uint8_t is_upper) 
+ {
   if (is_upper)
-    __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_2, pwm);
+    __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_2, ANGLE);
   else
-    __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, pwm);
-  HAL_Delay(50);
+    __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, ANGLE);
+  
+  uint32_t times = GetTick();
+  while (GetTick() - times < DELAY);
  }
 
 /**
@@ -383,8 +527,14 @@ static void MX_GPIO_Init(void)
   * @param None
   * @retval None
   */
- void GUNSHOOT() {
-   
+ void GUNSHOOT() 
+ {
+  uint32_t times = GetTick();
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, YES);
+
+  while (HAL_GetTick() - times < TIMEOFSHOT);
+
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, NO);
  }
 
  /**
@@ -392,15 +542,16 @@ static void MX_GPIO_Init(void)
   * @param None
   * @retval None
   */
- void MUSIC_PLAY() {
-    uint32_t times = 0;
-    for (uint8_t i = 10; i < 30; i++) {
-      if (HAL_GetTick() - times > 100) {
-        __HAL_TIM_SET_AUTORELOAD(&htim3, i*2);
-        __HAL_TIM_SET_COMPARE(&htim3,TIM_CHANNEL_1, i);
-        times = HAL_GetTick();
-      }
-    }
+ void MUSIC_PLAY() 
+ {
+  uint32_t times = 0;
+   for (uint8_t i = 10; i < 30; i++) 
+   {
+    __HAL_TIM_SET_AUTORELOAD(&htim3, i*2);
+    __HAL_TIM_SET_COMPARE(&htim3,TIM_CHANNEL_1, i);
+    while (HAL_GetTick() - times < 100);
+    times = HAL_GetTick();
+  }
  }
 
 /**
