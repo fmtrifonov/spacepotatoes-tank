@@ -110,6 +110,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
   uint32_t times = 0;
   uint8_t flag = 1;
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
@@ -501,8 +503,8 @@ static void MX_GPIO_Init(void)
   __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_3, speed_motor_1);
   __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2, speed_motor_2);
 
-  uint32_t times = GetTick();
-  while (GetTick() - times < DELAY);
+  uint32_t times = HAL_GetTick();
+  while (HAL_GetTick() - times < DELAY);
 
  }
 
@@ -518,8 +520,8 @@ static void MX_GPIO_Init(void)
   else
     __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, ANGLE);
   
-  uint32_t times = GetTick();
-  while (GetTick() - times < DELAY);
+  uint32_t times = HAL_GetTick();
+  while (HAL_GetTick() - times < DELAY);
  }
 
 /**
@@ -529,7 +531,7 @@ static void MX_GPIO_Init(void)
   */
  void GUNSHOOT() 
  {
-  uint32_t times = GetTick();
+  uint32_t times = HAL_GetTick();
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, YES);
 
   while (HAL_GetTick() - times < TIMEOFSHOT);
@@ -549,7 +551,7 @@ static void MX_GPIO_Init(void)
    {
     __HAL_TIM_SET_AUTORELOAD(&htim3, i*2);
     __HAL_TIM_SET_COMPARE(&htim3,TIM_CHANNEL_1, i);
-    while (HAL_GetTick() - times < 100);
+    while (HAL_GetTick() - times < DELAY*2);
     times = HAL_GetTick();
   }
  }
