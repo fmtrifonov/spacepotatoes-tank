@@ -36,11 +36,18 @@
 #define NO 0
 #define FORWARD 1
 #define BACKWARD -1
-#define STAY 0
+#define STAY (uint16_t) 0
 #define TIMEOFSHOT 2000
-#define SPEED 300
+#define SPEED (uint16_t) 255
 #define DELAY 50
-#define ANGLE 300
+#define SMALL_DELAY 5
+#define ANGLE (uint16_t) 50
+#define MIDDLE_POS (uint16_t) 700
+#define MAX_ANGLE (uint16_t) 1250
+#define VER_DELTA (uint16_t) 350
+#define VER_NULL (uint16_t) 200
+#define DIV (uint16_t) 20
+#define DIV_VER (uint16_t) 40
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -56,7 +63,11 @@ TIM_HandleTypeDef htim3;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
+uint8_t buff[BUFF_SIZE];
 uint8_t rx_buff;
+uint8_t buff_after;
+uint16_t ver_angle = MIDDLE_POS + VER_NULL;
+uint16_t hor_angle = MIDDLE_POS;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -68,6 +79,12 @@ static void MX_USART1_UART_Init(void);
 static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
 
+int MOTORS_MOVE(int8_t condition_motor_left, int8_t condition_motor_right);
+void SERVO_MOVE(uint8_t is_upper, uint8_t position);
+void GUNSHOOT();
+void MUSIC_PLAY();
+void rx_parse();
+void check_continue();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -110,28 +127,119 @@ int main(void)
   /* USER CODE BEGIN 2 */
   uint32_t times = 0;
   uint8_t flag = 1;
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
-  HAL_UART_Receive_IT(&huart1, &rx_buff, BUFF_SIZE);
+
+  __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_2, ver_angle);
+  __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, hor_angle);
+  HAL_Delay(DELAY);
+
+  HAL_UART_Receive_IT(&huart1, &rx_buff, 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    
     if((HAL_GetTick() - times) > 1000) // интервал 1000мс = 1сек
-      { 
-          // что-то делаем  
-          HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, flag);
-          if (flag == 1)
-            flag = 0;
-          else
-            flag = 1;
-          times = HAL_GetTick();
-      }
+    { 
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, flag);
+
+      if (flag == 1)
+        flag = 0;
+      else
+        flag = 1;
+      times = HAL_GetTick();
+    }
+
+    switch (buff[0]) 
+    {
+      case 'F': // motor forward
+        MOTORS_MOVE(FORWARD, FORWARD);
+        if (buff_after == buff[0]) {
+          buff_after = 0;
+          MOTORS_MOVE (STAY, STAY);
+        } else
+          buff_after = buff[0];
+        buff[0] = 0;
+        break;
+      case 'B': // motor backward
+        MOTORS_MOVE(BACKWARD, BACKWARD);
+        if (buff_after == buff[0]){
+          buff_after = 0;
+          MOTORS_MOVE (STAY, STAY);
+        } else
+          buff_after = buff[0];
+        buff[0] = 0;
+        break;
+      case 'R': // motor right
+        MOTORS_MOVE(FORWARD, BACKWARD);
+        if (buff_after == buff[0]){
+          buff_after = 0;
+          MOTORS_MOVE (STAY, STAY);
+        } else
+          buff_after = buff[0];
+        buff[0] = 0;
+        break;
+      case 'L': // motor left
+        MOTORS_MOVE(BACKWARD, FORWARD);
+        if (buff_after == buff[0]){
+          buff_after = 0;
+          MOTORS_MOVE (STAY, STAY);
+        } else
+          buff_after = buff[0];
+        buff[0] = 0;
+        break;
+      case 'U': // servo up
+        SERVO_MOVE(YES, YES);
+        if (buff_after == buff[0])
+          buff_after = 0;
+        else
+          buff_after = buff[0];
+        buff[0] = 0;
+        break;
+      case 'D': // servo down
+        SERVO_MOVE(YES, NO);
+        if (buff_after == buff[0])
+          buff_after = 0;
+        else
+          buff_after = buff[0];
+        buff[0] = 0;
+        break;
+      case 'S': // servo left
+        SERVO_MOVE(NO, YES);
+        if (buff_after == buff[0])
+          buff_after = 0;
+        else
+          buff_after = buff[0];
+        buff[0] = 0;
+        break;
+      case 'H': // servo right
+        SERVO_MOVE(NO, NO);
+        if (buff_after == buff[0])
+          buff_after = 0;
+        else
+          buff_after = buff[0];
+        buff[0] = 0;
+        break;
+      case 'G': // GUNSHOT
+        GUNSHOOT();
+        buff[0] = 0;
+        break;
+      case 'M': // MUSIC
+        MUSIC_PLAY();
+        buff[0] = 0;
+        break;
+      default:
+        check_continue();
+        break;
+    }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -199,9 +307,9 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 1151;
+  htim1.Init.Prescaler = 9-1;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 5624;
+  htim1.Init.Period = 255-1;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -218,10 +326,6 @@ static void MX_TIM1_Init(void)
   {
     Error_Handler();
   }
-  if (HAL_TIM_OC_Init(&htim1) != HAL_OK)
-  {
-    Error_Handler();
-  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
@@ -235,12 +339,19 @@ static void MX_TIM1_Init(void)
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
   sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
   if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
   {
     Error_Handler();
   }
-  sConfigOC.OCMode = TIM_OCMODE_TIMING;
-  if (HAL_TIM_OC_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
   {
     Error_Handler();
   }
@@ -282,9 +393,9 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 143;
+  htim2.Init.Prescaler = 144-1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 9999;
+  htim2.Init.Period = 10000-1;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -436,10 +547,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, Motor_1_2_Pin|Laser_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, Motor_1_1_Pin|Motor_2_2_Pin|Motor_2_1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(Laser_GPIO_Port, Laser_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : LED_Pin */
   GPIO_InitStruct.Pin = LED_Pin;
@@ -448,23 +556,58 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : Motor_1_2_Pin Laser_Pin */
-  GPIO_InitStruct.Pin = Motor_1_2_Pin|Laser_Pin;
+  /*Configure GPIO pin : Laser_Pin */
+  GPIO_InitStruct.Pin = Laser_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : Motor_1_1_Pin Motor_2_2_Pin Motor_2_1_Pin */
-  GPIO_InitStruct.Pin = Motor_1_1_Pin|Motor_2_2_Pin|Motor_2_1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(Laser_GPIO_Port, &GPIO_InitStruct);
 
 }
 
 /* USER CODE BEGIN 4 */
+
+/**
+  * @brief  This function for check to continue work.
+  * @param  None
+  * @retval None
+  */
+void check_continue() {
+  switch (buff_after) {
+    case 'F': // motor forward
+      MOTORS_MOVE(FORWARD, FORWARD);
+      break;
+    case 'B': // motor backward
+      MOTORS_MOVE(BACKWARD, BACKWARD);
+      break;
+    case 'R': // motor right
+      MOTORS_MOVE(FORWARD, BACKWARD);
+      break;
+    case 'L': // motor left
+      MOTORS_MOVE(BACKWARD, FORWARD);
+      break;
+    case 'U': // servo up
+      SERVO_MOVE(YES, YES);
+      break;
+    case 'D': // servo down
+      SERVO_MOVE(YES, NO);
+      break;
+    case 'S': // servo left
+      SERVO_MOVE(NO, YES);
+      break;
+    case 'H': // servo right
+      SERVO_MOVE(NO, NO);
+      break;
+    case 'G': // GUNSHOT
+      GUNSHOOT();
+      break;
+    case 'M': // MUSIC
+      MUSIC_PLAY();
+      break;
+    default:
+      break;
+  }
+}
 
 /**
   * @brief  This function for moving motors.
@@ -473,39 +616,81 @@ static void MX_GPIO_Init(void)
   */
  int MOTORS_MOVE(int8_t condition_motor_left, int8_t condition_motor_right) 
  {
-  uint8_t speed_motor_1 = 0;
-  uint8_t speed_motor_2 = 0;
+  // uint8_t speed_motor_1 = SPEED_NULL;
+  // uint8_t speed_motor_2 = SPEED_NULL;
 
-  if (condition_motor_left == FORWARD) 
-  {
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, STAY);
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, FORWARD);
-    speed_motor_1 = SPEED;
-  } else if (condition_motor_left == BACKWARD) 
-  {
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, FORWARD);
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, STAY);
-    speed_motor_1 = SPEED;
+  if (condition_motor_left == FORWARD && condition_motor_right == FORWARD) {
+    // if (TIM2->CCR1 == STAY && TIM2->CCR2 == (SPEED - 1) && TIM2->CCR3 == STAY && TIM2->CCR4 == (SPEED - 1)) {
+      __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_1, STAY);
+      __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2, (SPEED - 1));
+      __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_3, STAY);
+      __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_4, (SPEED - 1));
+      HAL_Delay(SMALL_DELAY);
+    // } else {
+    //   for (uint16_t i = 0; i < SPEED; i += 5) {
+    //     __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_1, STAY);
+    //     __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2, (SPEED - 1));
+    //     __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_3, STAY);
+    //     __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_4, (SPEED - 1));
+    //     HAL_Delay(SMALL_DELAY);
+    //   }
+    // }
+  } else if (condition_motor_left == BACKWARD && condition_motor_right == FORWARD) {
+    // if (TIM2->CCR1 == (SPEED - 1) && TIM2->CCR2 == STAY && TIM2->CCR3 == STAY && TIM2->CCR4 == (SPEED - 1)) {
+      __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_1, (SPEED - 1));
+      __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2, STAY);
+      __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_3, STAY);
+      __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_4, (SPEED - 1));
+      HAL_Delay(SMALL_DELAY);
+    // } else {
+    //   for (uint16_t i = 0; i < SPEED; i += 5) {
+    //     __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_1, i);
+    //     __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2, STAY);
+    //     __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_3, STAY);
+    //     __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_4, i);
+    //     HAL_Delay(SMALL_DELAY);
+    //   }
+    // }
+  } else if (condition_motor_left == FORWARD && condition_motor_right == BACKWARD) {
+    // if (TIM2->CCR1 == STAY && TIM2->CCR2 == (SPEED - 1) && TIM2->CCR3 == (SPEED - 1) && TIM2->CCR4 == STAY) {
+      __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_1, STAY);
+      __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2, (SPEED - 1));
+      __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_3, (SPEED - 1));
+      __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_4, STAY);
+      HAL_Delay(SMALL_DELAY);
+    // } else {
+    //   for (uint16_t i = 0; i < SPEED; i += 5) {
+    //     __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_1, STAY);
+    //     __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2, i);
+    //     __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_3, i);
+    //     __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_4, STAY);
+    //     HAL_Delay(SMALL_DELAY);
+    //   }
+    // }
+  } else if (condition_motor_left == BACKWARD && condition_motor_right == BACKWARD) {
+    // if (TIM2->CCR1 == (SPEED - 1) && TIM2->CCR2 == STAY && TIM2->CCR3 == (SPEED - 1) && TIM2->CCR4 == STAY) {
+      __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_1, (SPEED - 1));
+      __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2, STAY);
+      __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_3, (SPEED - 1));
+      __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_4, STAY);
+      HAL_Delay(SMALL_DELAY);
+    // } else {
+    //   for (uint16_t i = 0; i < SPEED; i += 5) {
+    //     __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_1, i);
+    //     __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2, STAY);
+    //     __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_3, i);
+    //     __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_4, STAY);
+    //     HAL_Delay(SMALL_DELAY);
+    //   }
+    // }
   }
 
-  if (condition_motor_right == FORWARD) 
-  {
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, STAY);
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, FORWARD);
-    speed_motor_2 = SPEED;
-  } else if (condition_motor_right == BACKWARD) 
-  {
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, FORWARD);
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, STAY);
-    speed_motor_2 = SPEED;
+  if (condition_motor_left == STAY && condition_motor_right == STAY) {
+    __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_1, STAY);
+    __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2, STAY);
+    __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_3, STAY);
+    __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_4, STAY);
   }
-
-  __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_3, speed_motor_1);
-  __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2, speed_motor_2);
-
-  uint32_t times = HAL_GetTick();
-  while (HAL_GetTick() - times < DELAY);
-
  }
 
  /**
@@ -513,15 +698,47 @@ static void MX_GPIO_Init(void)
   * @param is this upper servo or not
   * @retval None
   */
- void SERVO_MOVE(uint8_t is_upper) 
+ void SERVO_MOVE(uint8_t is_upper, uint8_t position) 
  {
-  if (is_upper)
-    __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_2, ANGLE);
-  else
-    __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, ANGLE);
   
-  uint32_t times = HAL_GetTick();
-  while (HAL_GetTick() - times < DELAY);
+  if (is_upper) 
+  {
+    if (position && (ver_angle > ANGLE + VER_DELTA)) 
+    {
+      for (uint16_t i = 0; i < ANGLE / DIV_VER; i++) {
+        ver_angle -= 1;
+        __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_2, ver_angle);
+        HAL_Delay(SMALL_DELAY);
+      }
+    }
+    else if (ver_angle < MAX_ANGLE - VER_DELTA)
+    {
+      for (uint16_t i = 0; i < ANGLE / DIV_VER; i++) {
+        ver_angle += 1;
+        __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_2, ver_angle);
+        HAL_Delay(SMALL_DELAY);
+      }
+    }
+  }
+  else
+  {
+    if (position && (hor_angle < MAX_ANGLE))
+    {
+      for (uint16_t i = 0; i < ANGLE / DIV; i++) {
+        hor_angle += 1;
+        __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, hor_angle);
+        HAL_Delay(SMALL_DELAY * 2);
+      }
+    }
+    else if (hor_angle > ANGLE)
+    {
+      for (uint16_t i = 0; i < ANGLE / DIV; i++) {
+        hor_angle -= 1;
+        __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, hor_angle);
+        HAL_Delay(SMALL_DELAY * 2);
+      }
+    }
+  }
  }
 
 /**
@@ -531,10 +748,9 @@ static void MX_GPIO_Init(void)
   */
  void GUNSHOOT() 
  {
-  uint32_t times = HAL_GetTick();
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, YES);
 
-  while (HAL_GetTick() - times < TIMEOFSHOT);
+  HAL_Delay(TIMEOFSHOT);
 
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, NO);
  }
@@ -546,14 +762,26 @@ static void MX_GPIO_Init(void)
   */
  void MUSIC_PLAY() 
  {
-  uint32_t times = 0;
-   for (uint8_t i = 10; i < 30; i++) 
-   {
+  uint8_t i = 10;
+  for (; i < 30; i++) 
+  {
     __HAL_TIM_SET_AUTORELOAD(&htim3, i*2);
     __HAL_TIM_SET_COMPARE(&htim3,TIM_CHANNEL_1, i);
-    while (HAL_GetTick() - times < DELAY*2);
-    times = HAL_GetTick();
+    HAL_Delay(DELAY*2);
   }
+  __HAL_TIM_SET_AUTORELOAD(&htim3, 1);
+  __HAL_TIM_SET_COMPARE(&htim3,TIM_CHANNEL_1, 0);
+
+ }
+
+/**
+  * @brief  This function is for parse data from BlueTooth.
+  * @param  None
+  * @retval None
+  */
+ void rx_parse() 
+ {
+   buff[0] = rx_buff;
  }
 
 /**
@@ -565,41 +793,8 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if(huart->Instance==USART1)
   {
-    switch (rx_buff) {
-      case 'F': // motor forward
-        MOTORS_MOVE(FORWARD, FORWARD);
-        break;
-      case 'B': // motor backward
-        MOTORS_MOVE(BACKWARD, BACKWARD);
-        break;
-      case 'R': // motor right
-        MOTORS_MOVE(FORWARD, BACKWARD);
-        break;
-      case 'L': // motor left
-        MOTORS_MOVE(BACKWARD, FORWARD);
-        break;
-      case 'U': // servo up
-        SERVO_MOVE(YES);
-        break;
-      case 'D': // servo down
-        SERVO_MOVE(YES);
-        break;
-      case 'S': // servo left
-        SERVO_MOVE(NO);
-        break;
-      case 'H': // servo right
-        SERVO_MOVE(NO);
-        break;
-      case 'G': // GUNSHOT
-        GUNSHOOT();
-        break;
-      case 'M': // MUSIC
-        MUSIC_PLAY();
-        break;
-      default:
-        break;
-    }
-    HAL_UART_Receive_IT(&huart1,rx_buff,BUFF_SIZE); // Enabling interrupt receive again
+    rx_parse();
+    HAL_UART_Receive_IT(&huart1,&rx_buff,1); // Enabling interrupt receive again
   }
 }
 /* USER CODE END 4 */
