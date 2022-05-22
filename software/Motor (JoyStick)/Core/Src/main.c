@@ -18,12 +18,11 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include<stdio.h>
-#include<math.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <string.h>
+#include<math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -33,19 +32,39 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define BUFF_SIZE 60
+#define YES 1
+#define NO 0
+#define FORWARD 1
+#define BACKWARD -1
+#define STAY (uint16_t) 0
+#define TIMEOFSHOT 2000
+#define SPEED (uint16_t) 255
+#define DELAY 50
+#define SMALL_DELAY 5
+#define ANGLE (uint16_t) 50
+#define MIDDLE_POS (uint16_t) 700
+#define MAX_ANGLE (uint16_t) 1250
+#define VER_DELTA (uint16_t) 350
+#define VER_NULL (uint16_t) 200
+#define DIV (uint16_t) 20
+#define DIV_VER (uint16_t) 40
+
 #define horizontalSticCenter 0 // значение "0" по горизонтальной оси в приведенных значениях
 #define verticalSticCenter 0 // значение "0" по вертикальной оси в приведенных значениях
 #define k 20                 // коэффициент отклонения от центра
 #define max_speed 300         // максимальное значение скорости. Используется для кодировки скорости
 #define min_speed -300
 #define PI 3.14159
-#define YES 1
-#define NO 0
-#define FORWARD 1
-#define BACKWARD -1
-#define STAY 0
-#define DELAY 50
 #define speed_border 0
+
+#define SERVOUP "str1"
+#define SERVODOWN "str2"
+#define SERVOLEFT "str3"
+#define SERVORIGHT "str4"
+#define GUN "str5"
+#define MUSIC "str6"
+#define STR_NULL ""
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -54,17 +73,50 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
- TIM_HandleTypeDef htim2;
+ TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim3;
+
+UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
+char buff[BUFF_SIZE]={0};
+//uint8_t rx_buff;
+uint8_t buff_after[BUFF_SIZE];
+uint16_t ver_angle = MIDDLE_POS + VER_NULL;
+uint16_t hor_angle = MIDDLE_POS;
 
+typedef struct USART_prop{
+  uint8_t usart_buf[BUFF_SIZE];
+  uint8_t usart_cnt;
+  uint8_t is_tcp_connect;//статус попытки создать соединение TCP с сервером
+  uint8_t is_text;//статус попытки передать текст серверу
+} USART_prop_ptr;
+USART_prop_ptr usartprop;
+
+int x_value;
+int y_value;
+int speed_left, speed_right;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_TIM3_Init(void);
+static void MX_USART1_UART_Init(void);
+static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
+
+int MOTORS_MOVE(int speed_left, int speed_right); 
+void SERVO_MOVE(uint8_t is_upper, uint8_t position);
+void GUNSHOOT();
+void MUSIC_PLAY();
+void rx_parse();
+void check_continue();
+int getXaxisData(uint8_t value);
+int getYaxisData(uint8_t value);
+void getValue(int x_value, int y_value, int *speed_left,int *speed_right);
 
 /* USER CODE END PFP */
 
@@ -102,128 +154,93 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_TIM2_Init();
+  MX_TIM3_Init();
+  MX_USART1_UART_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2); //PA1 TIM2 CH2
-  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1); //PA0 TIM2 CH1
-  //int speed_right; // переменные, хранящие в вычислениях скорости левого и правого двигателей
-  //int speed_left;
-  //int speed, horizontal_value;  // переменные, хранящие среднюю скорость и скорость поворота
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 0);  //правый мотор
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 0);
+  uint32_t times = 0;
+  uint8_t flag = 1;
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
 
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, 0); //левый мотор
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
+  __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_2, ver_angle);
+  __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, hor_angle);
+  HAL_Delay(DELAY);
+
+  HAL_UART_Receive_IT(&huart1, &rx_buff, 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /*printf("Введите значение скорости правого мотора: \n");
-    scanf("%d",speed_right);
-    printf("Введите значение скорости левого мотора: \n");
-    scanf("%d",speed_left);
-    printf("Введите уровень скорости от 1 до 6\n");
-    scanf("%c",control);
-    printf("Введите действие:\nW - вперед\nS - назад\nA - влево\nD - вправо\nQ - влево вперед\nE - вправо вперед\nZ - влево назад\nC - вправо назад\n");
-    scanf("%c",choice);
+    
+    if((HAL_GetTick() - times) > 1000) // интервал 1000мс = 1сек
+    { 
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, flag);
 
-    if (control == '1') {     // Скорость 1.
-      speed_left = 20;
-      speed_right = 20;
-    }
-    if (control == '2') {     // Скорость 2
-      speed_left = 50;
-      speed_right = 50;
-    }
-    if (control == '3') {     // Скорость 3.
-      speed_left = 80;
-      speed_right = 80;
-    }
-    if (control == '4') {     // Скорость 4.
-      speed_left = 120;
-      speed_right = 120;
-    }
-    if (control == '5') {     // Скорость 5
-      speed_left = 170;
-      speed_right = 170;
-    }
-    if (control == '6') {     // Скорость 6.
-      speed_left = 250;
-      speed_right = 250;
+      if (flag == 1)
+        flag = 0;
+      else
+        flag = 1;
+      times = HAL_GetTick();
     }
 
-    if (choice == 'W') {   
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 1);  
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 0);
-
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, 1);
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
+    if(!strcmp(usartprop.usart_buf, SERVOUP)){
+      SERVO_MOVE(YES, YES);
+      if (!strcmp(buff_after, usartprop.usart_buf))
+        strcpy(buff_after,STR_NULL);
+      else
+        strcpy(buff_after,usartprop.usart_buf); 
+      strcpy(usartprop.usart_buf,STR_NULL);
     }
-    else if(choice == 'S'){
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 0);
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 1);
-
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, 0);
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 1);
+    else if(!strcmp(usartprop.usart_buf,SERVODOWN)){
+      SERVO_MOVE(YES, NO);
+      if (!strcmp(buff_after, usartprop.usart_buf))
+        strcpy(buff_after,STR_NULL);
+      else
+        strcpy(buff_after,usartprop.usart_buf); 
+      strcpy(usartprop.usart_buf,STR_NULL);
     }
-    else if(choice == 'A'){
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 1);
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 0);
-
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, 0);
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 1);
+    else if(!strcmp(usartprop.usart_buf,SERVOLEFT)){
+      SERVO_MOVE(NO, YES);
+      if (!strcmp(buff_after, usartprop.usart_buf))
+        strcpy(buff_after,STR_NULL);
+      else
+        strcpy(buff_after,usartprop.usart_buf); 
+      strcpy(usartprop.usart_buf,STR_NULL);
     }
-    else if(choice == 'D'){
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 0);
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 1);
-
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, 1);
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
+    else if(!strcmp(usartprop.usart_buf,SERVORIGHT)){
+      SERVO_MOVE(NO, NO);
+      if (!strcmp(buff_after, usartprop.usart_buf))
+        strcpy(buff_after,STR_NULL);
+      else
+        strcpy(buff_after,usartprop.usart_buf); 
+      strcpy(usartprop.usart_buf,STR_NULL);
     }
-    else if(choice == 'Q'){
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 1);
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 0);
-
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, 1);
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
-
-      speed_left = speed_left / 2;
+    else if(!strcmp(usartprop.usart_buf,GUN)){
+      GUNSHOOT();
+      strcpy(usartprop.usart_buf,STR_NULL);
     }
-    else if(choice == 'E'){
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 1);
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 0);
-
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, 1);
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
-
-      speed_right = speed_right / 2;
+    else if(!strcmp(usartprop.usart_buf,MUSIC)){
+      MUSIC_PLAY();
+      strcpy(usartprop.usart_buf,STR_NULL);
     }
-    else if(choice == 'Z'){
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 0);
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 1);
-
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, 0);
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 1);
-
-      speed_left = speed_left / 2;
-    }
-    else if(choice == 'C'){
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 0);
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 1);
-
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, 0);
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 1);
-
-      speed_right = speed_right / 2;
+    else if(strlen(usartprop.usart_buf) > 0){
+      x_value = getXaxisData(usartprop.usart_buf);
+      y_value = getYaxisData(usartprop.usart_buf);
+      getValue(x_value,y_value,&speed_left,&speed_right);
+      MOTORS_MOVE(speed_left,speed_right);
+      strcpy(usartprop.usart_buf,STR_NULL);
     }
     else{
-      speed_left = 0;
-      speed_right = 0;
+      check_continue();
     }
-
-    __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_2, speed_right);
-    __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_1, speed_left);*/
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -271,6 +288,93 @@ void SystemClock_Config(void)
 }
 
 /**
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM1_Init(void)
+{
+
+  /* USER CODE BEGIN TIM1_Init 0 */
+
+  /* USER CODE END TIM1_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 9-1;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 255-1;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
+  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
+  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
+  sBreakDeadTimeConfig.DeadTime = 0;
+  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
+  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
+
+  /* USER CODE END TIM1_Init 2 */
+  HAL_TIM_MspPostInit(&htim1);
+
+}
+
+/**
   * @brief TIM2 Initialization Function
   * @param None
   * @retval None
@@ -290,9 +394,9 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 127;
+  htim2.Init.Prescaler = 144-1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 625;
+  htim2.Init.Period = 10000-1;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -318,11 +422,11 @@ static void MX_TIM2_Init(void)
   sConfigOC.Pulse = 0;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
   {
     Error_Handler();
   }
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
   {
     Error_Handler();
   }
@@ -330,6 +434,98 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 2 */
   HAL_TIM_MspPostInit(&htim2);
+
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 1151;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 20;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
+  HAL_TIM_MspPostInit(&htim3);
+
+}
+
+/**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 9600;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
 
 }
 
@@ -343,34 +539,34 @@ static void MX_GPIO_Init(void)
   GPIO_InitTypeDef GPIO_InitStruct = {0};
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5|GPIO_PIN_7, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5|GPIO_PIN_7, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(Laser_GPIO_Port, Laser_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : PA5 PA7 */
-  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_7;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  /*Configure GPIO pin : LED_Pin */
+  GPIO_InitStruct.Pin = LED_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB5 PB7 */
-  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_7;
+  /*Configure GPIO pin : Laser_Pin */
+  GPIO_InitStruct.Pin = Laser_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(Laser_GPIO_Port, &GPIO_InitStruct);
 
 }
 
 /* USER CODE BEGIN 4 */
-
 /*--------------------функции получения значений координатам-----------------*/
 int getXaxisData(uint8_t value)
 {
@@ -409,8 +605,39 @@ void getValue(int x_value, int y_value, int *speed_left,int *speed_right){
   if (*speed_left < min_speed) *speed_left = min_speed;
   if (*speed_right < min_speed) *speed_right = min_speed;
 }
-/*-------------------- функция управления двигателями ---------------*/
-int MOTORS_MOVE(int speed_left, int speed_right) 
+
+/**
+  * @brief  This function for check to continue work.
+  * @param  None
+  * @retval None
+  */
+void check_continue() {
+  if(!strcmp(buff_after, SERVOUP)){
+    SERVO_MOVE(YES, YES);
+  }
+  else if(!strcmp(buff_after,SERVODOWN)){
+    SERVO_MOVE(YES, NO);
+  }
+  else if(!strcmp(buff_after,SERVOLEFT)){
+    SERVO_MOVE(NO, YES);
+  }
+  else if(!strcmp(buff_after,SERVORIGHT)){
+    SERVO_MOVE(NO, NO);
+  }
+  else if(!strcmp(buff_after,GUN)){
+    GUNSHOOT();
+  }
+  else if(!strcmp(buff_after,MUSIC)){
+    MUSIC_PLAY();
+  }
+}
+
+/**
+  * @brief  This function for moving motors.
+  * @param  2 params - type of moving for each motor
+  * @retval None
+  */
+ int MOTORS_MOVE(int speed_left, int speed_right) 
  {
   if (speed_left > speed_border) 
   {
@@ -438,54 +665,126 @@ int MOTORS_MOVE(int speed_left, int speed_right)
   while (HAL_GetTick() - times < DELAY);
 
  }
-/*------------------ function for interrupting by BlueTooth -------------*/
+
+ /**
+  * @brief  This function for moving servo.
+  * @param is this upper servo or not
+  * @retval None
+  */
+ void SERVO_MOVE(uint8_t is_upper, uint8_t position) 
+ {
+  
+  if (is_upper) 
+  {
+    if (position && (ver_angle > ANGLE + VER_DELTA)) 
+    {
+      for (uint16_t i = 0; i < ANGLE / DIV_VER; i++) {
+        ver_angle -= 1;
+        __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_2, ver_angle);
+        HAL_Delay(SMALL_DELAY);
+      }
+    }
+    else if (ver_angle < MAX_ANGLE - VER_DELTA)
+    {
+      for (uint16_t i = 0; i < ANGLE / DIV_VER; i++) {
+        ver_angle += 1;
+        __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_2, ver_angle);
+        HAL_Delay(SMALL_DELAY);
+      }
+    }
+  }
+  else
+  {
+    if (position && (hor_angle < MAX_ANGLE))
+    {
+      for (uint16_t i = 0; i < ANGLE / DIV; i++) {
+        hor_angle += 1;
+        __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, hor_angle);
+        HAL_Delay(SMALL_DELAY * 2);
+      }
+    }
+    else if (hor_angle > ANGLE)
+    {
+      for (uint16_t i = 0; i < ANGLE / DIV; i++) {
+        hor_angle -= 1;
+        __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, hor_angle);
+        HAL_Delay(SMALL_DELAY * 2);
+      }
+    }
+  }
+ }
+
+/**
+  * @brief  This function for shouting.
+  * @param None
+  * @retval None
+  */
+ void GUNSHOOT() 
+ {
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, YES);
+
+  HAL_Delay(TIMEOFSHOT);
+
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, NO);
+ }
+
+ /**
+  * @brief  This function for playing music.
+  * @param None
+  * @retval None
+  */
+ void MUSIC_PLAY() 
+ {
+  uint8_t i = 10;
+  for (; i < 30; i++) 
+  {
+    __HAL_TIM_SET_AUTORELOAD(&htim3, i*2);
+    __HAL_TIM_SET_COMPARE(&htim3,TIM_CHANNEL_1, i);
+    HAL_Delay(DELAY*2);
+  }
+  __HAL_TIM_SET_AUTORELOAD(&htim3, 1);
+  __HAL_TIM_SET_COMPARE(&htim3,TIM_CHANNEL_1, 0);
+
+ }
+
+/**
+  * @brief  This function is for parse data from BlueTooth.
+  * @param  None
+  * @retval None
+  */
+ void rx_parse(){
+    uint8_t b;
+    b = buff[0];
+    //если вдруг случайно превысим длину буфера
+    if (usartprop.usart_cnt>59){
+        usartprop.usart_cnt=0;
+        HAL_UART_Receive_IT(&huart1,(uint8_t*)buff,1);
+        return;
+    } 
+    usartprop.usart_buf[usartprop.usart_cnt] = b;
+    if(b==0x0A){
+        usartprop.usart_buf[usartprop.usart_cnt+1]=0;
+        usartprop.usart_cnt=0;
+        HAL_UART_Receive_IT(&huart1,(uint8_t*)buff,1);
+        return;
+    }
+    usartprop.usart_cnt++;
+    HAL_UART_Receive_IT(&huart1,(uint8_t*)buff,1);
+}
+
+/**
+  * @brief  This function is for interrupting by BlueTooth.
+  * @param UART number
+  * @retval None
+  */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if(huart->Instance==USART1)
   {
-    switch (rx_buff) {
-      /*case 'F': // motor forward
-        MOTORS_MOVE(FORWARD, FORWARD);
-        break;
-      case 'B': // motor backward
-        MOTORS_MOVE(BACKWARD, BACKWARD);
-        break;
-      case 'R': // motor right
-        MOTORS_MOVE(FORWARD, BACKWARD);
-        break;
-      case 'L': // motor left
-        MOTORS_MOVE(BACKWARD, FORWARD);
-        break;*/
-      case 'U': // servo up
-        SERVO_MOVE(YES);
-        break;
-      case 'D': // servo down
-        SERVO_MOVE(YES);
-        break;
-      case 'S': // servo left
-        SERVO_MOVE(NO);
-        break;
-      case 'H': // servo right
-        SERVO_MOVE(NO);
-        break;
-      case 'G': // GUNSHOT
-        GUNSHOOT();
-        break;
-      case 'M': // MUSIC
-        MUSIC_PLAY();
-        break;
-      default:
-        int x_value = getXaxisData(rx_buff);
-        int y_value = getYaxisData(rx_buff);
-        int speed_left, speed_right;
-        getValue(x_value,y_value,&speed_left,&speed_right);
-        MOTORS_MOVE(speed_left,speed_right);
-        break;
-    }
-    HAL_UART_Receive_IT(&huart1,rx_buff,BUFF_SIZE); // Enabling interrupt receive again
+    rx_parse();
+    //HAL_UART_Receive_IT(&huart1,&rx_buff,1); // Enabling interrupt receive again
   }
 }
-
 /* USER CODE END 4 */
 
 /**
