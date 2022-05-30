@@ -66,7 +66,7 @@ UART_HandleTypeDef huart1;
 uint8_t buff[BUFF_SIZE];
 uint8_t rx_buff;
 uint8_t buff_after;
-uint16_t ver_angle = MIDDLE_POS + VER_NULL;
+uint16_t ver_angle = MIDDLE_POS - VER_NULL;
 uint16_t hor_angle = MIDDLE_POS;
 /* USER CODE END PV */
 
@@ -134,6 +134,9 @@ int main(void)
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+
+  
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, 1);
 
   __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_2, ver_angle);
   __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, hor_angle);
@@ -616,8 +619,12 @@ void check_continue() {
   */
  int MOTORS_MOVE(int8_t condition_motor_left, int8_t condition_motor_right) 
  {
-  // uint8_t speed_motor_1 = SPEED_NULL;
-  // uint8_t speed_motor_2 = SPEED_NULL;
+
+  ver_angle = MIDDLE_POS - VER_NULL;
+  hor_angle = MIDDLE_POS;
+  __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_2, ver_angle);
+  __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, hor_angle);
+  HAL_Delay(DELAY);
 
   if (condition_motor_left == FORWARD && condition_motor_right == FORWARD) {
     // if (TIM2->CCR1 == STAY && TIM2->CCR2 == (SPEED - 1) && TIM2->CCR3 == STAY && TIM2->CCR4 == (SPEED - 1)) {
@@ -700,6 +707,11 @@ void check_continue() {
   */
  void SERVO_MOVE(uint8_t is_upper, uint8_t position) 
  {
+
+  __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_1, STAY);
+  __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_2, STAY);
+  __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_3, STAY);
+  __HAL_TIM_SET_COMPARE(&htim1,TIM_CHANNEL_4, STAY);
   
   if (is_upper) 
   {
@@ -727,7 +739,7 @@ void check_continue() {
       for (uint16_t i = 0; i < ANGLE / DIV; i++) {
         hor_angle += 1;
         __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, hor_angle);
-        HAL_Delay(SMALL_DELAY * 2);
+        HAL_Delay(SMALL_DELAY);
       }
     }
     else if (hor_angle > ANGLE)
@@ -735,7 +747,7 @@ void check_continue() {
       for (uint16_t i = 0; i < ANGLE / DIV; i++) {
         hor_angle -= 1;
         __HAL_TIM_SET_COMPARE(&htim2,TIM_CHANNEL_3, hor_angle);
-        HAL_Delay(SMALL_DELAY * 2);
+        HAL_Delay(SMALL_DELAY);
       }
     }
   }
@@ -748,11 +760,11 @@ void check_continue() {
   */
  void GUNSHOOT() 
  {
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, YES);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, 0);
 
   HAL_Delay(TIMEOFSHOT);
 
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, NO);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, 1);
  }
 
  /**
